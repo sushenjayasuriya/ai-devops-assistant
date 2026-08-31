@@ -37,6 +37,10 @@ public class ToolRegistry {
         return tool;
     }
 
+    public List<DevOpsTool> getAllTools() {
+        return new ArrayList<>(toolMap.values());
+    }
+
     public List<ToolMetadata> getAvailableTools() {
         return toolMap.values().stream()
                 .map(ToolMetadata::from)
