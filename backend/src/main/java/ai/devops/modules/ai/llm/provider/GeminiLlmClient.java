@@ -74,7 +74,8 @@ public class GeminiLlmClient implements LlmClient {
         }
 
         try {
-            String endpoint = String.format("%s/models/%s:generateContent?key=%s", baseUrl, model, apiKey);
+            String cleanModel = model.startsWith("models/") ? model.substring(7) : model;
+            String endpoint = String.format("%s/models/%s:generateContent?key=%s", baseUrl, cleanModel, apiKey);
 
             ObjectNode requestBody = objectMapper.createObjectNode();
 
@@ -86,36 +87,17 @@ public class GeminiLlmClient implements LlmClient {
                     case USER -> "user";
                     case ASSISTANT -> "model";
                     case SYSTEM -> "user"; // In Gemini API, system can be passed as user instruction or systemInstruction
-                    case TOOL -> "function";
+                    case TOOL -> "user";
                 };
-                contentObj.put("role", role.equals("function") ? "function" : role);
+                contentObj.put("role", role);
 
                 ArrayNode partsArray = contentObj.putArray("parts");
 
                 if (msg.getRole() == LlmMessage.Role.TOOL) {
-                    ObjectNode funcResponseObj = partsArray.addObject().putObject("functionResponse");
-                    funcResponseObj.put("name", msg.getToolName());
-                    ObjectNode responsePayload = funcResponseObj.putObject("response");
-                    try {
-                        JsonNode parsed = objectMapper.readTree(msg.getContent());
-                        responsePayload.set("result", parsed);
-                    } catch (Exception e) {
-                        responsePayload.put("output", msg.getContent());
-                    }
+                    partsArray.addObject().put("text", String.format("OBSERVATION from tool [%s]:\n%s", msg.getToolName(), msg.getContent()));
                 } else if (msg.getToolCalls() != null && !msg.getToolCalls().isEmpty()) {
-                    if (msg.getContent() != null && !msg.getContent().isBlank()) {
-                        partsArray.addObject().put("text", msg.getContent());
-                    }
-                    for (LlmToolCall tc : msg.getToolCalls()) {
-                        ObjectNode funcCallObj = partsArray.addObject().putObject("functionCall");
-                        funcCallObj.put("name", tc.getName());
-                        ObjectNode argsObj = funcCallObj.putObject("args");
-                        if (tc.getArguments() != null) {
-                            for (Map.Entry<String, Object> entry : tc.getArguments().entrySet()) {
-                                argsObj.set(entry.getKey(), objectMapper.valueToTree(entry.getValue()));
-                            }
-                        }
-                    }
+                    String thought = (msg.getContent() != null && !msg.getContent().isBlank()) ? msg.getContent() : "Invoking diagnostics tool...";
+                    partsArray.addObject().put("text", thought);
                 } else {
                     partsArray.addObject().put("text", msg.getContent() != null ? msg.getContent() : "");
                 }
@@ -151,6 +133,7 @@ public class GeminiLlmClient implements LlmClient {
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("x-goog-api-key", apiKey);
 
             HttpEntity<String> entity = new HttpEntity<>(objectMapper.writeValueAsString(requestBody), headers);
 

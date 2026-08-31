@@ -40,14 +40,18 @@ app:
       - cat /proc/loadavg
       - cat /proc/meminfo
   ai:
-    provider: mock # mock, openai, ollama
+    provider: ${AI_PROVIDER:gemini} # gemini, openai, ollama, mock
+    gemini:
+      api-key: ${GEMINI_API_KEY:}
+      model: ${GEMINI_MODEL:gemini-3.6-flash}
+      base-url: ${GEMINI_BASE_URL:https://generativelanguage.googleapis.com/v1beta}
     openai:
       api-key: ${OPENAI_API_KEY:mock-key}
       model: ${OPENAI_MODEL:gpt-4o}
       base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
     ollama:
       base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
-      model: ${OLLAMA_MODEL:llama3}
+      model: ${OLLAMA_MODEL:llama3.2}
   integrations:
     prometheus:
       default-url: ${PROMETHEUS_URL:http://localhost:9090}
