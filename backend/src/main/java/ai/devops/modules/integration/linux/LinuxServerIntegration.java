@@ -1,13 +1,17 @@
 package ai.devops.modules.integration.linux;
 
-import ai.devops.common.exception.UnauthorizedActionException;
 import ai.devops.modules.integration.core.InfrastructureIntegration;
 import ai.devops.modules.integration.core.IntegrationType;
+import ai.devops.modules.integration.linux.client.LinuxSshClient;
+import ai.devops.modules.integration.linux.model.LinuxCommand;
+import ai.devops.modules.integration.linux.model.LinuxServerTelemetry;
+import ai.devops.security.encryption.SecretCryptoService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.net.URI;
 import java.util.*;
 
 @Service
@@ -15,10 +19,14 @@ public class LinuxServerIntegration implements InfrastructureIntegration {
 
     private static final Logger log = LoggerFactory.getLogger(LinuxServerIntegration.class);
 
-    private final Set<String> allowlistedCommands;
+    private final LinuxSshClient sshClient;
+    private final SecretCryptoService cryptoService;
+    private final ObjectMapper objectMapper;
 
-    public LinuxServerIntegration(@Value("${app.security.allowlist-commands:uptime,vmstat,df,free,top,ps}") List<String> allowlist) {
-        this.allowlistedCommands = new HashSet<>(allowlist);
+    public LinuxServerIntegration(LinuxSshClient sshClient, SecretCryptoService cryptoService, ObjectMapper objectMapper) {
+        this.sshClient = sshClient;
+        this.cryptoService = cryptoService;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -28,34 +36,66 @@ public class LinuxServerIntegration implements InfrastructureIntegration {
 
     @Override
     public boolean testConnection(String endpointUrl, String configEncrypted) {
-        log.info("Testing Linux SSH collector connection: {}", endpointUrl);
-        return true;
+        HostConfig config = parseEndpointAndConfig(endpointUrl, configEncrypted);
+        Map<String, Object> result = sshClient.testConnection(config.host, config.port, config.user, config.password, config.privateKey);
+        return Boolean.TRUE.equals(result.get("connected"));
     }
 
     @Override
     public Map<String, Object> collectHealth(String endpointUrl, String configEncrypted) {
-        return Map.of(
-                "status", "HEALTHY",
-                "uptime", "16 days, 20:14",
-                "loadAverage", "14.8, 12.3, 9.7",
-                "os", "Ubuntu 22.04.3 LTS"
-        );
+        HostConfig config = parseEndpointAndConfig(endpointUrl, configEncrypted);
+        return sshClient.testConnection(config.host, config.port, config.user, config.password, config.privateKey);
     }
 
-    public String executeAllowlistedCommand(String command, String host) {
-        String baseCommand = command.trim().split("\\s+")[0];
-        if (!allowlistedCommands.contains(baseCommand) && !allowlistedCommands.contains(command.trim())) {
-            log.warn("BLOCKED forbidden Linux command execution attempt: '{}' on host '{}'", command, host);
-            throw new UnauthorizedActionException(
-                    String.format("Command '%s' is not in the security allowlist. Arbitrary command execution is strictly prohibited.", command));
+    public LinuxServerTelemetry collectTelemetry(String endpointUrl, String configEncrypted, int timeoutMs) {
+        HostConfig config = parseEndpointAndConfig(endpointUrl, configEncrypted);
+        return sshClient.collectServerTelemetry(config.host, config.port, config.user, config.password, config.privateKey, timeoutMs > 0 ? timeoutMs : 5000);
+    }
+
+    public String executeTypedCommand(String endpointUrl, String configEncrypted, LinuxCommand command, int timeoutMs) {
+        HostConfig config = parseEndpointAndConfig(endpointUrl, configEncrypted);
+        return sshClient.executeTypedCommand(config.host, config.port, config.user, config.password, config.privateKey, command, timeoutMs > 0 ? timeoutMs : 5000);
+    }
+
+    private HostConfig parseEndpointAndConfig(String endpointUrl, String configEncrypted) {
+        String host = "localhost";
+        int port = 22;
+        String user = "devops";
+        String password = null;
+        String privateKey = null;
+
+        if (endpointUrl != null && !endpointUrl.isBlank()) {
+            String trimmed = endpointUrl.replace("ssh://", "");
+            if (trimmed.contains(":")) {
+                String[] parts = trimmed.split(":");
+                host = parts[0];
+                try {
+                    port = Integer.parseInt(parts[1]);
+                } catch (NumberFormatException ignored) {}
+            } else {
+                host = trimmed;
+            }
         }
 
-        log.info("Executing allowlisted command '{}' on host '{}'", command, host);
-        return switch (baseCommand) {
-            case "uptime" -> " 12:20:14 up 16 days, 20:14,  2 users,  load average: 14.82, 12.31, 9.75";
-            case "free" -> "               total        used        free      shared  buff/cache   available\nMem:        65839212    59255290     1583920      245000     5000002     5120000\nSwap:        8388608     1048576     7340032";
-            case "df" -> "Filesystem     1K-blocks      Used Available Use% Mounted on\n/dev/sda1      515578768 350593562 138768822  72% /";
-            default -> "Command output simulated safely under allowlist policy.";
-        };
+        if (configEncrypted != null && !configEncrypted.isBlank()) {
+            try {
+                String decrypted = cryptoService.decrypt(configEncrypted);
+                if (decrypted != null && decrypted.startsWith("{")) {
+                    Map<String, Object> map = objectMapper.readValue(decrypted, Map.class);
+                    if (map.containsKey("user")) user = String.valueOf(map.get("user"));
+                    if (map.containsKey("password")) password = String.valueOf(map.get("password"));
+                    if (map.containsKey("privateKey")) privateKey = String.valueOf(map.get("privateKey"));
+                    if (map.containsKey("port")) port = Integer.parseInt(String.valueOf(map.get("port")));
+                } else if (decrypted != null) {
+                    password = decrypted;
+                }
+            } catch (Exception ex) {
+                log.warn("Failed to decrypt SSH credentials: {}", ex.getMessage());
+            }
+        }
+
+        return new HostConfig(host, port, user, password, privateKey);
     }
+
+    private record HostConfig(String host, int port, String user, String password, String privateKey) {}
 }

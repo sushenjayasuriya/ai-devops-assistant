@@ -1,5 +1,6 @@
 package ai.devops.modules.audit.entity;
 
+import ai.devops.modules.user.entity.OrganizationEntity;
 import ai.devops.modules.user.entity.UserEntity;
 import jakarta.persistence.*;
 import java.time.Instant;
@@ -12,6 +13,10 @@ public class AuditLogEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "organization_id")
+    private OrganizationEntity organization;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
@@ -68,6 +73,14 @@ public class AuditLogEntity {
 
     public void setId(UUID id) {
         this.id = id;
+    }
+
+    public OrganizationEntity getOrganization() {
+        return organization;
+    }
+
+    public void setOrganization(OrganizationEntity organization) {
+        this.organization = organization;
     }
 
     public UserEntity getUser() {

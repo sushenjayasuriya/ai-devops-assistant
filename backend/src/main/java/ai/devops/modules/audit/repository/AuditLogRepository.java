@@ -10,7 +10,8 @@ import java.util.UUID;
 
 @Repository
 public interface AuditLogRepository extends JpaRepository<AuditLogEntity, UUID> {
-    Page<AuditLogEntity> findAllByOrderByTimestampDesc(Pageable pageable);
+    Page<AuditLogEntity> findByOrganizationIdOrderByTimestampDesc(UUID organizationId, Pageable pageable);
+    Page<AuditLogEntity> findByOrganizationIdAndEnvironmentNameOrderByTimestampDesc(UUID organizationId, String environmentName, Pageable pageable);
     Page<AuditLogEntity> findByEnvironmentNameOrderByTimestampDesc(String environmentName, Pageable pageable);
-    Page<AuditLogEntity> findByCorrelationIdOrderByTimestampDesc(String correlationId, Pageable pageable);
+    Page<AuditLogEntity> findAllByOrderByTimestampDesc(Pageable pageable);
 }

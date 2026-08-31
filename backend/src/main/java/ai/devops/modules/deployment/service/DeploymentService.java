@@ -3,6 +3,7 @@ package ai.devops.modules.deployment.service;
 import ai.devops.common.exception.ResourceNotFoundException;
 import ai.devops.modules.deployment.entity.DeploymentEntity;
 import ai.devops.modules.deployment.repository.DeploymentRepository;
+import ai.devops.security.rbac.SecurityUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,15 +21,25 @@ public class DeploymentService {
 
     @Transactional(readOnly = true)
     public List<DeploymentEntity> getDeployments(UUID environmentId) {
-        if (environmentId != null) {
-            return deploymentRepository.findByEnvironmentIdOrderByStartedAtDesc(environmentId);
+        UUID orgId = SecurityUtils.getCurrentOrganizationId();
+        if (orgId == null) {
+            return List.of();
         }
-        return deploymentRepository.findAllByOrderByStartedAtDesc();
+
+        if (environmentId != null) {
+            return deploymentRepository.findByOrganizationIdAndEnvironmentIdOrderByStartedAtDesc(orgId, environmentId);
+        }
+        return deploymentRepository.findByOrganizationIdOrderByStartedAtDesc(orgId);
     }
 
     @Transactional(readOnly = true)
     public DeploymentEntity getDeploymentById(UUID id) {
-        return deploymentRepository.findById(id)
+        UUID orgId = SecurityUtils.getCurrentOrganizationId();
+        if (orgId == null) {
+            throw new ResourceNotFoundException("Deployment", id);
+        }
+
+        return deploymentRepository.findByIdAndOrganizationId(id, orgId)
                 .orElseThrow(() -> new ResourceNotFoundException("Deployment", id));
     }
 }

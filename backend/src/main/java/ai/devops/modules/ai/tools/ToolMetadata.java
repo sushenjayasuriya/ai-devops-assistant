@@ -11,16 +11,18 @@ public class ToolMetadata {
     private Map<String, String> parameterSchema;
     private RiskLevel riskLevel;
     private Role requiredRole;
+    private boolean readOnly;
     private boolean requiresProductionApproval;
 
     public ToolMetadata() {}
 
-    public ToolMetadata(String name, String description, Map<String, String> parameterSchema, RiskLevel riskLevel, Role requiredRole, boolean requiresProductionApproval) {
+    public ToolMetadata(String name, String description, Map<String, String> parameterSchema, RiskLevel riskLevel, Role requiredRole, boolean readOnly, boolean requiresProductionApproval) {
         this.name = name;
         this.description = description;
         this.parameterSchema = parameterSchema;
         this.riskLevel = riskLevel;
         this.requiredRole = requiredRole;
+        this.readOnly = readOnly;
         this.requiresProductionApproval = requiresProductionApproval;
     }
 
@@ -31,6 +33,7 @@ public class ToolMetadata {
                 tool.getParameterSchema(),
                 tool.getRiskLevel(),
                 tool.getRequiredRole(),
+                tool.isReadOnly(),
                 tool.requiresProductionApproval()
         );
     }
@@ -73,6 +76,14 @@ public class ToolMetadata {
 
     public void setRequiredRole(Role requiredRole) {
         this.requiredRole = requiredRole;
+    }
+
+    public boolean isReadOnly() {
+        return readOnly;
+    }
+
+    public void setReadOnly(boolean readOnly) {
+        this.readOnly = readOnly;
     }
 
     public boolean isRequiresProductionApproval() {

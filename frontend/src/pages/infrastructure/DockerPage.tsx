@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEnvironment } from '../../context/EnvironmentContext';
 import { infraService } from '../../services/infraService';
-import { Box, RotateCw, Square, Play, FileText, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Box, RotateCw, Square, Play, FileText, AlertTriangle, CheckCircle2, Activity } from 'lucide-react';
 import { Badge } from '../../components/common/Badge';
 
 export const DockerPage: React.FC = () => {
@@ -20,8 +20,8 @@ export const DockerPage: React.FC = () => {
   });
 
   const actionMutation = useMutation({
-    mutationFn: ({ id, action, approved }: { id: string; action: string; approved?: boolean }) =>
-      infraService.executeContainerAction(id, action, approved),
+    mutationFn: ({ id, action }: { id: string; action: string }) =>
+      infraService.executeContainerAction(id, action),
     onSuccess: (data) => {
       setFeedback({
         type: 'success',
@@ -46,8 +46,12 @@ export const DockerPage: React.FC = () => {
 
   const handleOpenLogs = async (container: { id: string; name: string }) => {
     setActiveLogContainer(container);
-    const containerLogs = await infraService.getContainerLogs(container.id, 50);
-    setLogs(containerLogs);
+    try {
+      const containerLogs = await infraService.getContainerLogs(container.id, 50);
+      setLogs(containerLogs);
+    } catch (err: any) {
+      setLogs([`Failed to fetch logs: ${err?.response?.data?.message || err.message}`]);
+    }
   };
 
   return (

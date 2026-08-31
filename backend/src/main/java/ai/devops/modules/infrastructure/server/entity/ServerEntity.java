@@ -2,6 +2,7 @@ package ai.devops.modules.infrastructure.server.entity;
 
 import ai.devops.common.model.BaseEntity;
 import ai.devops.modules.environment.entity.EnvironmentEntity;
+import ai.devops.modules.integration.core.entity.IntegrationEntity;
 import jakarta.persistence.*;
 import java.time.Instant;
 
@@ -13,11 +14,24 @@ public class ServerEntity extends BaseEntity {
     @JoinColumn(name = "environment_id", nullable = false)
     private EnvironmentEntity environment;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "integration_id")
+    private IntegrationEntity integration;
+
     @Column(name = "hostname", nullable = false)
     private String hostname;
 
     @Column(name = "ip_address", nullable = false)
     private String ipAddress;
+
+    @Column(name = "ssh_port", nullable = false)
+    private Integer sshPort = 22;
+
+    @Column(name = "ssh_user", nullable = false)
+    private String sshUser = "devops";
+
+    @Column(name = "ssh_credential_encrypted", columnDefinition = "TEXT")
+    private String sshCredentialEncrypted;
 
     @Column(name = "os_info")
     private String osInfo;
@@ -41,6 +55,14 @@ public class ServerEntity extends BaseEntity {
         this.environment = environment;
     }
 
+    public IntegrationEntity getIntegration() {
+        return integration;
+    }
+
+    public void setIntegration(IntegrationEntity integration) {
+        this.integration = integration;
+    }
+
     public String getHostname() {
         return hostname;
     }
@@ -55,6 +77,30 @@ public class ServerEntity extends BaseEntity {
 
     public void setIpAddress(String ipAddress) {
         this.ipAddress = ipAddress;
+    }
+
+    public Integer getSshPort() {
+        return sshPort != null ? sshPort : 22;
+    }
+
+    public void setSshPort(Integer sshPort) {
+        this.sshPort = sshPort;
+    }
+
+    public String getSshUser() {
+        return sshUser != null ? sshUser : "devops";
+    }
+
+    public void setSshUser(String sshUser) {
+        this.sshUser = sshUser;
+    }
+
+    public String getSshCredentialEncrypted() {
+        return sshCredentialEncrypted;
+    }
+
+    public void setSshCredentialEncrypted(String sshCredentialEncrypted) {
+        this.sshCredentialEncrypted = sshCredentialEncrypted;
     }
 
     public String getOsInfo() {

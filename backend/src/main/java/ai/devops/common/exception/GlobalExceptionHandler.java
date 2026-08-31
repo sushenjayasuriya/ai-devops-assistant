@@ -42,6 +42,55 @@ public class GlobalExceptionHandler {
                 .body(new ErrorResponse(ex.getCode(), ex.getMessage(), CorrelationIdFilter.getCurrentCorrelationId(), ex.getDetails()));
     }
 
+    @ExceptionHandler(IntegrationUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handleIntegrationUnavailable(IntegrationUnavailableException ex) {
+        log.error("Integration unavailable: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(new ErrorResponse(ex.getCode(), ex.getMessage(), CorrelationIdFilter.getCurrentCorrelationId(), ex.getDetails()));
+    }
+
+    @ExceptionHandler(IntegrationTimeoutException.class)
+    public ResponseEntity<ErrorResponse> handleIntegrationTimeout(IntegrationTimeoutException ex) {
+        log.error("Integration timeout: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.GATEWAY_TIMEOUT)
+                .body(new ErrorResponse(ex.getCode(), ex.getMessage(), CorrelationIdFilter.getCurrentCorrelationId(), ex.getDetails()));
+    }
+
+    @ExceptionHandler(IntegrationAuthException.class)
+    public ResponseEntity<ErrorResponse> handleIntegrationAuth(IntegrationAuthException ex) {
+        log.error("Integration auth failure: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                .body(new ErrorResponse(ex.getCode(), ex.getMessage(), CorrelationIdFilter.getCurrentCorrelationId(), ex.getDetails()));
+    }
+
+    @ExceptionHandler(IntegrationForbiddenException.class)
+    public ResponseEntity<ErrorResponse> handleIntegrationForbidden(IntegrationForbiddenException ex) {
+        log.warn("Integration forbidden: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new ErrorResponse(ex.getCode(), ex.getMessage(), CorrelationIdFilter.getCurrentCorrelationId(), ex.getDetails()));
+    }
+
+    @ExceptionHandler(IntegrationInvalidResponseException.class)
+    public ResponseEntity<ErrorResponse> handleIntegrationInvalidResponse(IntegrationInvalidResponseException ex) {
+        log.error("Integration invalid response: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                .body(new ErrorResponse(ex.getCode(), ex.getMessage(), CorrelationIdFilter.getCurrentCorrelationId(), ex.getDetails()));
+    }
+
+    @ExceptionHandler(IntegrationConfigException.class)
+    public ResponseEntity<ErrorResponse> handleIntegrationConfig(IntegrationConfigException ex) {
+        log.warn("Integration configuration error: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ErrorResponse(ex.getCode(), ex.getMessage(), CorrelationIdFilter.getCurrentCorrelationId(), ex.getDetails()));
+    }
+
+    @ExceptionHandler(SsrfProtectionException.class)
+    public ResponseEntity<ErrorResponse> handleSsrfException(SsrfProtectionException ex) {
+        log.warn("SSRF protection triggered: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ErrorResponse(ex.getCode(), ex.getMessage(), CorrelationIdFilter.getCurrentCorrelationId(), ex.getDetails()));
+    }
+
     @ExceptionHandler(IntegrationException.class)
     public ResponseEntity<ErrorResponse> handleIntegrationException(IntegrationException ex) {
         log.error("Integration failure: {}", ex.getMessage());

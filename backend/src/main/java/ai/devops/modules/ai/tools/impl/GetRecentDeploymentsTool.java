@@ -4,20 +4,19 @@ import ai.devops.common.model.RiskLevel;
 import ai.devops.modules.ai.tools.DevOpsTool;
 import ai.devops.modules.ai.tools.ToolExecutionResult;
 import ai.devops.modules.deployment.entity.DeploymentEntity;
-import ai.devops.modules.deployment.repository.DeploymentRepository;
+import ai.devops.modules.deployment.service.DeploymentService;
 import ai.devops.security.rbac.Role;
 import org.springframework.stereotype.Component;
 
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 @Component
 public class GetRecentDeploymentsTool implements DevOpsTool {
 
-    private final DeploymentRepository deploymentRepository;
+    private final DeploymentService deploymentService;
 
-    public GetRecentDeploymentsTool(DeploymentRepository deploymentRepository) {
-        this.deploymentRepository = deploymentRepository;
+    public GetRecentDeploymentsTool(DeploymentService deploymentService) {
+        this.deploymentService = deploymentService;
     }
 
     @Override
@@ -27,12 +26,25 @@ public class GetRecentDeploymentsTool implements DevOpsTool {
 
     @Override
     public String getDescription() {
-        return "Retrieve recent CI/CD deployments, commit SHAs, author, and changelogs to correlate with incidents.";
+        return "Retrieve the latest CI/CD deployment history, release versions, commits, and rollout statuses.";
     }
 
     @Override
     public Map<String, String> getParameterSchema() {
-        return Map.of("serviceName", "string (optional): Target service name (e.g. thingsboard-core-app)");
+        return Map.of(
+                "serviceName", "string (optional): Target service name to filter deployment history",
+                "environment", "string (optional): Target environment name"
+        );
+    }
+
+    @Override
+    public Set<String> getRequiredParameters() {
+        return Set.of();
+    }
+
+    @Override
+    public Set<String> getAllowedParameters() {
+        return Set.of("serviceName", "environment");
     }
 
     @Override
@@ -46,35 +58,41 @@ public class GetRecentDeploymentsTool implements DevOpsTool {
     }
 
     @Override
+    public boolean isReadOnly() {
+        return true;
+    }
+
+    @Override
     public boolean requiresProductionApproval() {
         return false;
     }
 
     @Override
     public ToolExecutionResult execute(Map<String, Object> parameters) {
-        String serviceName = parameters != null && parameters.containsKey("serviceName") ?
-                String.valueOf(parameters.get("serviceName")) : null;
+        String serviceFilter = parameters.containsKey("serviceName") ? String.valueOf(parameters.get("serviceName")).trim() : null;
 
-        List<DeploymentEntity> deployments;
-        if (serviceName != null && !serviceName.isBlank()) {
-            deployments = deploymentRepository.findByServiceNameOrderByStartedAtDesc(serviceName);
-        } else {
-            deployments = deploymentRepository.findAllByOrderByStartedAtDesc();
+        List<DeploymentEntity> deployments = deploymentService.getDeployments(null);
+        if (serviceFilter != null && !serviceFilter.isBlank()) {
+            deployments = deployments.stream()
+                    .filter(d -> d.getServiceName().toLowerCase().contains(serviceFilter.toLowerCase()))
+                    .toList();
         }
 
-        List<Map<String, Object>> result = deployments.stream()
-                .map(d -> Map.<String, Object>of(
-                        "id", d.getId(),
-                        "serviceName", d.getServiceName(),
-                        "versionTag", d.getVersionTag(),
-                        "commitSha", d.getCommitSha() != null ? d.getCommitSha() : "HEAD",
-                        "deployedBy", d.getDeployedBy() != null ? d.getDeployedBy() : "ci-bot",
-                        "status", d.getStatus(),
-                        "changelog", d.getChangelog() != null ? d.getChangelog() : "",
-                        "startedAt", d.getStartedAt()
-                ))
+        List<Map<String, Object>> summary = deployments.stream()
+                .map(d -> {
+                    Map<String, Object> map = new HashMap<>();
+                    map.put("id", d.getId());
+                    map.put("serviceName", d.getServiceName());
+                    map.put("version", d.getVersionTag());
+                    map.put("commitSha", d.getCommitSha());
+                    map.put("status", d.getStatus());
+                    map.put("deployedBy", d.getDeployedBy());
+                    map.put("startedAt", d.getStartedAt());
+                    map.put("completedAt", d.getCompletedAt());
+                    return map;
+                })
                 .toList();
 
-        return ToolExecutionResult.ok(getName(), result);
+        return ToolExecutionResult.ok(getName(), summary);
     }
 }

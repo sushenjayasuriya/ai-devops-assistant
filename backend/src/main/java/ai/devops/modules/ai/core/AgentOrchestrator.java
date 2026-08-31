@@ -1,5 +1,7 @@
 package ai.devops.modules.ai.core;
 
+import ai.devops.common.exception.ResourceNotFoundException;
+import ai.devops.common.exception.UnauthorizedActionException;
 import ai.devops.common.model.RiskLevel;
 import ai.devops.modules.ai.entity.AIActionEntity;
 import ai.devops.modules.ai.entity.AIConversationEntity;
@@ -58,12 +60,19 @@ public class AgentOrchestrator {
 
     @Transactional
     public FOIRResponse processConversation(UUID conversationId, String prompt, UUID environmentId) {
+        UUID orgId = SecurityUtils.getCurrentOrganizationId();
+        if (orgId == null) {
+            throw new UnauthorizedActionException("User is not associated with an active organization.");
+        }
+
         String currentUserEmail = SecurityUtils.getCurrentUserEmail();
-        UserEntity user = userRepository.findByEmail(currentUserEmail).orElse(null);
+        UserEntity user = userRepository.findByEmail(currentUserEmail)
+                .orElseThrow(() -> new UnauthorizedActionException("User account not found"));
 
         AIConversationEntity conversation = null;
         if (conversationId != null) {
-            conversation = conversationRepository.findById(conversationId).orElse(null);
+            conversation = conversationRepository.findByIdAndOrganizationId(conversationId, orgId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Conversation", conversationId));
         }
 
         if (conversation == null) {
@@ -71,7 +80,9 @@ public class AgentOrchestrator {
             conversation.setUser(user);
             conversation.setTitle(prompt.length() > 40 ? prompt.substring(0, 37) + "..." : prompt);
             if (environmentId != null) {
-                conversation.setEnvironment(environmentRepository.findById(environmentId).orElse(null));
+                EnvironmentEntity env = environmentRepository.findByIdAndOrganizationId(environmentId, orgId)
+                        .orElseThrow(() -> new ResourceNotFoundException("Environment", environmentId));
+                conversation.setEnvironment(env);
             }
             conversation = conversationRepository.save(conversation);
         }

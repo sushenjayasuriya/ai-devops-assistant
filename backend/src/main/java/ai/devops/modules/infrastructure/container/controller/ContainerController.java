@@ -47,12 +47,11 @@ public class ContainerController {
     }
 
     @PostMapping("/{id}/actions")
-    @Operation(summary = "Execute lifecycle action on container (restart, stop, start)")
+    @Operation(summary = "Execute or request lifecycle action on container (restart, stop, start). Production strictly requires approval.")
     public ResponseEntity<ApiResponse<Map<String, Object>>> executeAction(
             @PathVariable UUID id,
-            @RequestParam String action,
-            @RequestParam(defaultValue = "false") boolean approved) {
-        Map<String, Object> result = containerService.executeContainerAction(id, action, approved);
+            @RequestParam String action) {
+        Map<String, Object> result = containerService.requestOrExecuteContainerAction(id, action);
         return ResponseEntity.ok(ApiResponse.ok("Container action executed successfully", result));
     }
 }

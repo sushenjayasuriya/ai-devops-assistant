@@ -5,9 +5,9 @@ services:
     image: postgres:16-alpine
     container_name: devops-postgres
     environment:
-      POSTGRES_DB: devopsdb
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: devopspassword
+      POSTGRES_DB: ${POSTGRES_DB:-devopsdb}
+      POSTGRES_USER: ${DATABASE_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-devopspassword}
     ports:
       - "5432:5432"
     volumes:
@@ -17,6 +17,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - devops-net
 
   redis:
     image: redis:7.2-alpine
@@ -28,6 +30,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - devops-net
 
   prometheus:
     image: prom/prometheus:v2.51.0
@@ -41,6 +45,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
+    networks:
+      - devops-net
 
   backend:
     build:
@@ -50,9 +56,14 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: prod
       DATABASE_URL: jdbc:postgresql://postgres:5432/devopsdb
-      DATABASE_USERNAME: postgres
-      DATABASE_PASSWORD: devopspassword
+      DATABASE_USERNAME: ${DATABASE_USERNAME:-postgres}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-devopspassword}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET:-404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+      APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY:-W3u+9sX/5J2v8N1q4Y7z0A3c6E9g2I5l8O1r4U7x0A3=}
       PROMETHEUS_URL: http://prometheus:9090
+      DOCKER_HOST: tcp://host.docker.internal:2375
     ports:
       - "8080:8080"
     depends_on:
@@ -62,6 +73,8 @@ services:
         condition: service_healthy
       prometheus:
         condition: service_healthy
+    networks:
+      - devops-net
 
   frontend:
     build:
@@ -72,6 +85,12 @@ services:
       - "80:80"
     depends_on:
       - backend
+    networks:
+      - devops-net
+
+networks:
+  devops-net:
+    driver: bridge
 
 volumes:
   postgres_data:

@@ -7,10 +7,10 @@ import ai.devops.modules.infrastructure.container.entity.ContainerEntity;
 import ai.devops.modules.infrastructure.container.repository.ContainerRepository;
 import ai.devops.modules.infrastructure.container.service.ContainerService;
 import ai.devops.security.rbac.Role;
+import ai.devops.security.rbac.SecurityUtils;
 import org.springframework.stereotype.Component;
 
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 
 @Component
 public class RestartContainerTool implements DevOpsTool {
@@ -30,25 +30,40 @@ public class RestartContainerTool implements DevOpsTool {
 
     @Override
     public String getDescription() {
-        return "Restart a Docker container. Requires approval in PRODUCTION environments.";
+        return "Restart a Docker container. In PRODUCTION environments, this generates an approval request and requires human authorization.";
     }
 
     @Override
     public Map<String, String> getParameterSchema() {
         return Map.of(
                 "containerId", "string (required): Container name or ID",
-                "approved", "boolean (optional): Whether explicit human approval was granted (default: false)"
+                "environment", "string (optional): Target environment name"
         );
     }
 
     @Override
+    public Set<String> getRequiredParameters() {
+        return Set.of("containerId");
+    }
+
+    @Override
+    public Set<String> getAllowedParameters() {
+        return Set.of("containerId", "environment");
+    }
+
+    @Override
     public RiskLevel getRiskLevel() {
-        return RiskLevel.MEDIUM_RISK;
+        return RiskLevel.HIGH_RISK;
     }
 
     @Override
     public Role getRequiredRole() {
         return Role.DEVOPS_ENGINEER;
+    }
+
+    @Override
+    public boolean isReadOnly() {
+        return false;
     }
 
     @Override
@@ -58,21 +73,32 @@ public class RestartContainerTool implements DevOpsTool {
 
     @Override
     public ToolExecutionResult execute(Map<String, Object> parameters) {
-        String containerId = String.valueOf(parameters.getOrDefault("containerId", "thingsboard-core-app"));
-        boolean approved = Boolean.parseBoolean(String.valueOf(parameters.getOrDefault("approved", "false")));
+        String containerId = String.valueOf(parameters.get("containerId")).trim();
+        UUID orgId = SecurityUtils.getCurrentOrganizationId();
 
-        Optional<ContainerEntity> containerOpt = containerRepository.findByName(containerId)
-                .or(() -> containerRepository.findByContainerId(containerId));
+        Optional<ContainerEntity> containerOpt = Optional.empty();
+        if (orgId != null) {
+            containerOpt = containerRepository.findByNameAndOrganizationId(containerId, orgId)
+                    .or(() -> containerRepository.findByIdAndOrganizationId(tryParseUuid(containerId), orgId));
+        }
 
         if (containerOpt.isEmpty()) {
-            return ToolExecutionResult.error(getName(), "Container not found: " + containerId);
+            return ToolExecutionResult.error(getName(), "Container not found in organization inventory: " + containerId);
         }
 
         try {
-            Map<String, Object> result = containerService.executeContainerAction(containerOpt.get().getId(), "restart", approved);
+            Map<String, Object> result = containerService.requestOrExecuteContainerAction(containerOpt.get().getId(), "restart");
             return ToolExecutionResult.ok(getName(), result);
         } catch (Exception ex) {
             return ToolExecutionResult.error(getName(), ex.getMessage());
+        }
+    }
+
+    private UUID tryParseUuid(String val) {
+        try {
+            return UUID.fromString(val);
+        } catch (Exception e) {
+            return UUID.randomUUID();
         }
     }
 }

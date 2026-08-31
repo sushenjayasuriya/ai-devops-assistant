@@ -24,11 +24,26 @@ public class IntegrationEntity extends BaseEntity {
     @Column(name = "endpoint_url", nullable = false)
     private String endpointUrl;
 
+    @Column(name = "auth_type", nullable = false)
+    private String authType = "NONE"; // NONE, BEARER_TOKEN, BASIC_AUTH, SSH_KEY, KUBECONFIG
+
     @Column(name = "config_encrypted", columnDefinition = "TEXT")
     private String configEncrypted;
 
+    @Column(name = "timeout_ms", nullable = false)
+    private Integer timeoutMs = 5000;
+
+    @Column(name = "max_retries", nullable = false)
+    private Integer maxRetries = 2;
+
+    @Column(name = "metadata_json", columnDefinition = "TEXT")
+    private String metadataJson;
+
+    @Column(name = "enabled", nullable = false)
+    private boolean enabled = true;
+
     @Column(name = "health_status", nullable = false)
-    private String healthStatus = "HEALTHY"; // HEALTHY, UNHEALTHY, UNCONFIGURED
+    private String healthStatus = "UNCONFIGURED"; // HEALTHY, UNHEALTHY, UNCONFIGURED
 
     @Column(name = "last_synced_at")
     private Instant lastSyncedAt;
@@ -67,12 +82,52 @@ public class IntegrationEntity extends BaseEntity {
         this.endpointUrl = endpointUrl;
     }
 
+    public String getAuthType() {
+        return authType;
+    }
+
+    public void setAuthType(String authType) {
+        this.authType = authType;
+    }
+
     public String getConfigEncrypted() {
         return configEncrypted;
     }
 
     public void setConfigEncrypted(String configEncrypted) {
         this.configEncrypted = configEncrypted;
+    }
+
+    public Integer getTimeoutMs() {
+        return timeoutMs != null ? timeoutMs : 5000;
+    }
+
+    public void setTimeoutMs(Integer timeoutMs) {
+        this.timeoutMs = timeoutMs;
+    }
+
+    public Integer getMaxRetries() {
+        return maxRetries != null ? maxRetries : 2;
+    }
+
+    public void setMaxRetries(Integer maxRetries) {
+        this.maxRetries = maxRetries;
+    }
+
+    public String getMetadataJson() {
+        return metadataJson;
+    }
+
+    public void setMetadataJson(String metadataJson) {
+        this.metadataJson = metadataJson;
+    }
+
+    public boolean isEnabled() {
+        return enabled;
+    }
+
+    public void setEnabled(boolean enabled) {
+        this.enabled = enabled;
     }
 
     public String getHealthStatus() {

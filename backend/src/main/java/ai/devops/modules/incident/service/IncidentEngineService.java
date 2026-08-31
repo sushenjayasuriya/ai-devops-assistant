@@ -7,6 +7,7 @@ import ai.devops.modules.incident.entity.IncidentEntity;
 import ai.devops.modules.incident.entity.IncidentEventEntity;
 import ai.devops.modules.incident.repository.IncidentEventRepository;
 import ai.devops.modules.incident.repository.IncidentRepository;
+import ai.devops.security.rbac.SecurityUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,30 +34,41 @@ public class IncidentEngineService {
 
     @Transactional(readOnly = true)
     public List<IncidentEntity> getIncidents(UUID envId, IncidentStatus status) {
-        if (envId != null && status != null) {
-            return incidentRepository.findByEnvironmentIdAndStatusOrderByStartedAtDesc(envId, status);
-        } else if (envId != null) {
-            return incidentRepository.findByEnvironmentIdOrderByStartedAtDesc(envId);
-        } else if (status != null) {
-            return incidentRepository.findByStatusOrderByStartedAtDesc(status);
+        UUID orgId = SecurityUtils.getCurrentOrganizationId();
+        if (orgId == null) {
+            return List.of();
         }
-        return incidentRepository.findAllByOrderByStartedAtDesc();
+
+        if (envId != null && status != null) {
+            return incidentRepository.findByOrganizationIdAndEnvironmentIdAndStatusOrderByStartedAtDesc(orgId, envId, status);
+        } else if (envId != null) {
+            return incidentRepository.findByOrganizationIdAndEnvironmentIdOrderByStartedAtDesc(orgId, envId);
+        } else if (status != null) {
+            return incidentRepository.findByOrganizationIdAndStatusOrderByStartedAtDesc(orgId, status);
+        }
+        return incidentRepository.findByOrganizationIdOrderByStartedAtDesc(orgId);
     }
 
     @Transactional(readOnly = true)
     public IncidentEntity getIncidentById(UUID id) {
-        return incidentRepository.findById(id)
+        UUID orgId = SecurityUtils.getCurrentOrganizationId();
+        if (orgId == null) {
+            throw new ResourceNotFoundException("Incident", id);
+        }
+
+        return incidentRepository.findByIdAndOrganizationId(id, orgId)
                 .orElseThrow(() -> new ResourceNotFoundException("Incident", id));
     }
 
     @Transactional(readOnly = true)
     public List<IncidentEventEntity> getIncidentEvents(UUID incidentId) {
-        return eventRepository.findByIncidentIdOrderByTimestampAsc(incidentId);
+        IncidentEntity incident = getIncidentById(incidentId); // Validates organization ownership!
+        return eventRepository.findByIncidentIdOrderByTimestampAsc(incident.getId());
     }
 
     @Transactional
     public IncidentEntity updateIncidentStatus(UUID id, IncidentStatus newStatus) {
-        IncidentEntity incident = getIncidentById(id);
+        IncidentEntity incident = getIncidentById(id); // Validates organization ownership!
         incident.setStatus(newStatus);
         if (newStatus == IncidentStatus.RESOLVED || newStatus == IncidentStatus.CLOSED) {
             incident.setResolvedAt(Instant.now());
@@ -75,7 +87,7 @@ public class IncidentEngineService {
 
     @Transactional(readOnly = true)
     public Map<String, Object> getIncidentInvestigation(UUID id) {
-        IncidentEntity incident = getIncidentById(id);
+        IncidentEntity incident = getIncidentById(id); // Validates organization ownership!
         return correlationService.correlateIncident(incident);
     }
 }

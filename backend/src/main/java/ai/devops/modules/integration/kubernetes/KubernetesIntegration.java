@@ -2,8 +2,11 @@ package ai.devops.modules.integration.kubernetes;
 
 import ai.devops.modules.integration.core.InfrastructureIntegration;
 import ai.devops.modules.integration.core.IntegrationType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import ai.devops.modules.integration.kubernetes.client.KubernetesClientService;
+import ai.devops.modules.integration.kubernetes.dto.K8sDeploymentDto;
+import ai.devops.modules.integration.kubernetes.dto.K8sNamespaceDto;
+import ai.devops.modules.integration.kubernetes.dto.K8sPodDto;
+import ai.devops.modules.integration.kubernetes.dto.K8sServiceDto;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -11,7 +14,11 @@ import java.util.*;
 @Service
 public class KubernetesIntegration implements InfrastructureIntegration {
 
-    private static final Logger log = LoggerFactory.getLogger(KubernetesIntegration.class);
+    private final KubernetesClientService k8sClientService;
+
+    public KubernetesIntegration(KubernetesClientService k8sClientService) {
+        this.k8sClientService = k8sClientService;
+    }
 
     @Override
     public IntegrationType getType() {
@@ -20,27 +27,36 @@ public class KubernetesIntegration implements InfrastructureIntegration {
 
     @Override
     public boolean testConnection(String endpointUrl, String configEncrypted) {
-        log.info("Testing Kubernetes API connection: {}", endpointUrl);
-        return true;
+        Map<String, Object> result = k8sClientService.testConnection(configEncrypted);
+        return Boolean.TRUE.equals(result.get("connected"));
     }
 
     @Override
     public Map<String, Object> collectHealth(String endpointUrl, String configEncrypted) {
-        return Map.of(
-                "status", "HEALTHY",
-                "clusterVersion", "v1.29.2",
-                "nodesReady", 3,
-                "nodesTotal", 3,
-                "podsRunning", 24,
-                "podsPending", 0
-        );
+        return k8sClientService.testConnection(configEncrypted);
     }
 
-    public List<Map<String, Object>> getPods(String namespace) {
-        return List.of(
-                Map.of("name", "thingsboard-app-69c7f7d79b-z9k2q", "namespace", namespace != null ? namespace : "default", "status", "CrashLoopBackOff", "restarts", 7, "cpu", "940m", "memory", "1840Mi"),
-                Map.of("name", "postgres-ha-postgresql-0", "namespace", namespace != null ? namespace : "default", "status", "Running", "restarts", 0, "cpu", "120m", "memory", "512Mi"),
-                Map.of("name", "redis-master-0", "namespace", namespace != null ? namespace : "default", "status", "Running", "restarts", 0, "cpu", "35m", "memory", "128Mi")
-        );
+    public List<K8sNamespaceDto> getNamespaces(String configEncrypted) {
+        return k8sClientService.getNamespaces(configEncrypted);
+    }
+
+    public List<K8sPodDto> getPods(String configEncrypted, String namespace) {
+        return k8sClientService.getPods(configEncrypted, namespace);
+    }
+
+    public List<K8sDeploymentDto> getDeployments(String configEncrypted, String namespace) {
+        return k8sClientService.getDeployments(configEncrypted, namespace);
+    }
+
+    public List<K8sServiceDto> getServices(String configEncrypted, String namespace) {
+        return k8sClientService.getServices(configEncrypted, namespace);
+    }
+
+    public List<String> getPodLogs(String configEncrypted, String namespace, String podName, String containerName, int tailLines) {
+        return k8sClientService.getPodLogs(configEncrypted, namespace, podName, containerName, tailLines);
+    }
+
+    public Map<String, Object> restartDeployment(String configEncrypted, String namespace, String deploymentName) {
+        return k8sClientService.restartDeployment(configEncrypted, namespace, deploymentName);
     }
 }

@@ -24,8 +24,8 @@ public class ToolRegistry {
         this.auditService = auditService;
         for (DevOpsTool tool : tools) {
             toolMap.put(tool.getName().toLowerCase(), tool);
-            log.info("Registered AI DevOps Tool: [{}] (Risk: {}, Required Role: {})",
-                    tool.getName(), tool.getRiskLevel(), tool.getRequiredRole());
+            log.info("Registered AI DevOps Tool: [{}] (Risk: {}, Required Role: {}, ReadOnly: {})",
+                    tool.getName(), tool.getRiskLevel(), tool.getRequiredRole(), tool.isReadOnly());
         }
     }
 
@@ -53,11 +53,20 @@ public class ToolRegistry {
             throw new UnauthorizedActionException(toolName, Role.DEVOPS_ENGINEER.name());
         }
 
-        String envName = parameters != null && parameters.containsKey("environment") ?
-                String.valueOf(parameters.get("environment")) : "UNKNOWN";
+        Map<String, Object> params = parameters != null ? parameters : Map.of();
+
+        // Parameter Validation (missing required / forbidden unknown params)
+        try {
+            tool.validateParameters(params);
+        } catch (IllegalArgumentException ex) {
+            log.warn("Tool [{}] parameter validation failed: {}", toolName, ex.getMessage());
+            return ToolExecutionResult.error(toolName, "Invalid parameters: " + ex.getMessage());
+        }
+
+        String envName = params.containsKey("environment") ? String.valueOf(params.get("environment")) : "UNKNOWN";
 
         try {
-            ToolExecutionResult result = tool.execute(parameters != null ? parameters : Map.of());
+            ToolExecutionResult result = tool.execute(params);
 
             auditService.recordAudit(
                     "AI_TOOL_EXECUTE:" + tool.getName(),
@@ -65,7 +74,7 @@ public class ToolRegistry {
                     tool.getName(),
                     envName,
                     tool.getRiskLevel(),
-                    parameters != null ? parameters.toString() : "{}",
+                    params.toString(),
                     result.isSuccess() ? "SUCCESS" : "FAILURE",
                     result.getError(),
                     null
@@ -80,7 +89,7 @@ public class ToolRegistry {
                     tool.getName(),
                     envName,
                     tool.getRiskLevel(),
-                    parameters != null ? parameters.toString() : "{}",
+                    params.toString(),
                     "FAILURE",
                     ex.getMessage(),
                     null

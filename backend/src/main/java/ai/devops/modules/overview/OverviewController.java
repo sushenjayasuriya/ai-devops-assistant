@@ -2,12 +2,12 @@ package ai.devops.modules.overview;
 
 import ai.devops.common.response.ApiResponse;
 import ai.devops.modules.deployment.repository.DeploymentRepository;
-import ai.devops.modules.environment.entity.EnvironmentEntity;
 import ai.devops.modules.environment.repository.EnvironmentRepository;
 import ai.devops.modules.incident.IncidentStatus;
 import ai.devops.modules.incident.repository.IncidentRepository;
 import ai.devops.modules.infrastructure.container.repository.ContainerRepository;
 import ai.devops.modules.infrastructure.server.repository.ServerRepository;
+import ai.devops.security.rbac.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
@@ -40,16 +40,28 @@ public class OverviewController {
     }
 
     @GetMapping
-    @Operation(summary = "Get global infrastructure overview and health summary")
+    @Operation(summary = "Get global infrastructure overview and health summary for current tenant organization")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getOverview(@RequestParam(required = false) UUID envId) {
-        long serverCount = envId != null ? serverRepository.findByEnvironmentId(envId).size() : serverRepository.count();
-        long containerCount = envId != null ? containerRepository.findByEnvironmentId(envId).size() : containerRepository.count();
+        UUID orgId = SecurityUtils.getCurrentOrganizationId();
+        if (orgId == null) {
+            return ResponseEntity.ok(ApiResponse.ok(Map.of("healthSummary", "HEALTHY", "serverCount", 0, "containerCount", 0)));
+        }
+
+        long serverCount = envId != null ?
+                serverRepository.findByOrganizationIdAndEnvironmentId(orgId, envId).size() :
+                serverRepository.findByOrganizationId(orgId).size();
+
+        long containerCount = envId != null ?
+                containerRepository.findByOrganizationIdAndEnvironmentId(orgId, envId).size() :
+                containerRepository.findByOrganizationId(orgId).size();
+
         long openIncidents = envId != null ?
-                incidentRepository.findByEnvironmentIdAndStatusOrderByStartedAtDesc(envId, IncidentStatus.OPEN).size() :
-                incidentRepository.findByStatusOrderByStartedAtDesc(IncidentStatus.OPEN).size();
+                incidentRepository.findByOrganizationIdAndEnvironmentIdAndStatusOrderByStartedAtDesc(orgId, envId, IncidentStatus.OPEN).size() :
+                incidentRepository.findByOrganizationIdAndStatusOrderByStartedAtDesc(orgId, IncidentStatus.OPEN).size();
+
         long recentDeployments = envId != null ?
-                deploymentRepository.findByEnvironmentIdOrderByStartedAtDesc(envId).size() :
-                deploymentRepository.count();
+                deploymentRepository.findByOrganizationIdAndEnvironmentIdOrderByStartedAtDesc(orgId, envId).size() :
+                deploymentRepository.findByOrganizationIdOrderByStartedAtDesc(orgId).size();
 
         String healthSummary = openIncidents > 0 ? "DEGRADED" : "HEALTHY";
 
@@ -62,7 +74,7 @@ public class OverviewController {
         summary.put("averageCpuPercent", "DEGRADED".equals(healthSummary) ? 68.4 : 24.1);
         summary.put("averageMemoryPercent", "DEGRADED".equals(healthSummary) ? 76.8 : 42.0);
         summary.put("averageDiskPercent", 62.5);
-        summary.put("activeEnvironments", environmentRepository.count());
+        summary.put("activeEnvironments", environmentRepository.findByOrganizationIdOrderByCreatedAtAsc(orgId).size());
 
         return ResponseEntity.ok(ApiResponse.ok(summary));
     }

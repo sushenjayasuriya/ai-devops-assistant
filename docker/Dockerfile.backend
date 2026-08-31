@@ -21,5 +21,6 @@ USER appuser:appgroup
 
 COPY --from=builder /build/backend/target/*.jar app.jar
 
+ENV JAVA_OPTS="-Xms128m -Xmx384m -XX:+UseSerialGC"
 EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar app.jar"]

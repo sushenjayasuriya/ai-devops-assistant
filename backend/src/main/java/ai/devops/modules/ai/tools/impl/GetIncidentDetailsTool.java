@@ -3,26 +3,21 @@ package ai.devops.modules.ai.tools.impl;
 import ai.devops.common.model.RiskLevel;
 import ai.devops.modules.ai.tools.DevOpsTool;
 import ai.devops.modules.ai.tools.ToolExecutionResult;
+import ai.devops.modules.incident.IncidentStatus;
 import ai.devops.modules.incident.entity.IncidentEntity;
-import ai.devops.modules.incident.repository.IncidentRepository;
 import ai.devops.modules.incident.service.IncidentEngineService;
 import ai.devops.security.rbac.Role;
 import org.springframework.stereotype.Component;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 
 @Component
 public class GetIncidentDetailsTool implements DevOpsTool {
 
-    private final IncidentRepository incidentRepository;
-    private final IncidentEngineService incidentService;
+    private final IncidentEngineService incidentEngineService;
 
-    public GetIncidentDetailsTool(IncidentRepository incidentRepository, IncidentEngineService incidentService) {
-        this.incidentRepository = incidentRepository;
-        this.incidentService = incidentService;
+    public GetIncidentDetailsTool(IncidentEngineService incidentEngineService) {
+        this.incidentEngineService = incidentEngineService;
     }
 
     @Override
@@ -32,12 +27,25 @@ public class GetIncidentDetailsTool implements DevOpsTool {
 
     @Override
     public String getDescription() {
-        return "Retrieve the current active incidents, severity, affected resources, and timeline events.";
+        return "Retrieve active alerts, incident status, root-cause timelines, and impacted services.";
     }
 
     @Override
     public Map<String, String> getParameterSchema() {
-        return Map.of("incidentId", "string (optional): Incident UUID");
+        return Map.of(
+                "incidentId", "string (optional): Incident UUID to retrieve specific incident analysis",
+                "status", "string (optional): Filter status (OPEN, INVESTIGATING, MITIGATED, RESOLVED, CLOSED)"
+        );
+    }
+
+    @Override
+    public Set<String> getRequiredParameters() {
+        return Set.of();
+    }
+
+    @Override
+    public Set<String> getAllowedParameters() {
+        return Set.of("incidentId", "status");
     }
 
     @Override
@@ -51,47 +59,46 @@ public class GetIncidentDetailsTool implements DevOpsTool {
     }
 
     @Override
+    public boolean isReadOnly() {
+        return true;
+    }
+
+    @Override
     public boolean requiresProductionApproval() {
         return false;
     }
 
     @Override
     public ToolExecutionResult execute(Map<String, Object> parameters) {
-        String incidentIdStr = parameters != null && parameters.containsKey("incidentId") ?
-                String.valueOf(parameters.get("incidentId")) : null;
+        if (parameters.containsKey("incidentId") && parameters.get("incidentId") != null && !String.valueOf(parameters.get("incidentId")).isBlank()) {
+            UUID id = UUID.fromString(String.valueOf(parameters.get("incidentId")));
+            Map<String, Object> investigation = incidentEngineService.getIncidentInvestigation(id);
+            return ToolExecutionResult.ok(getName(), investigation);
+        }
 
-        if (incidentIdStr != null && !incidentIdStr.isBlank()) {
+        IncidentStatus status = null;
+        if (parameters.containsKey("status") && parameters.get("status") != null && !String.valueOf(parameters.get("status")).isBlank()) {
             try {
-                UUID id = UUID.fromString(incidentIdStr);
-                Optional<IncidentEntity> incidentOpt = incidentRepository.findById(id);
-                if (incidentOpt.isPresent()) {
-                    IncidentEntity inc = incidentOpt.get();
-                    Map<String, Object> details = Map.of(
-                            "id", inc.getId(),
-                            "title", inc.getTitle(),
-                            "severity", inc.getSeverity().name(),
-                            "status", inc.getStatus().name(),
-                            "resource", inc.getAffectedResourceId() != null ? inc.getAffectedResourceId() : "",
-                            "startedAt", inc.getStartedAt(),
-                            "events", incidentService.getIncidentEvents(inc.getId())
-                    );
-                    return ToolExecutionResult.ok(getName(), details);
-                }
+                status = IncidentStatus.valueOf(String.valueOf(parameters.get("status")).toUpperCase());
             } catch (Exception ignored) {}
         }
 
-        List<IncidentEntity> incidents = incidentRepository.findAllByOrderByStartedAtDesc();
-        List<Map<String, Object>> result = incidents.stream()
-                .map(inc -> Map.<String, Object>of(
-                        "id", inc.getId(),
-                        "title", inc.getTitle(),
-                        "severity", inc.getSeverity().name(),
-                        "status", inc.getStatus().name(),
-                        "resource", inc.getAffectedResourceId() != null ? inc.getAffectedResourceId() : "",
-                        "startedAt", inc.getStartedAt()
-                ))
+        List<IncidentEntity> incidents = incidentEngineService.getIncidents(null, status);
+        List<Map<String, Object>> summary = incidents.stream()
+                .map(i -> {
+                    Map<String, Object> map = new HashMap<>();
+                    map.put("id", i.getId());
+                    map.put("title", i.getTitle());
+                    map.put("severity", i.getSeverity());
+                    map.put("status", i.getStatus());
+                    map.put("affectedResourceType", i.getAffectedResourceType());
+                    map.put("affectedResourceId", i.getAffectedResourceId());
+                    map.put("environment", i.getEnvironment() != null ? i.getEnvironment().getName() : "UNKNOWN");
+                    map.put("startedAt", i.getStartedAt());
+                    return map;
+                })
                 .toList();
 
-        return ToolExecutionResult.ok(getName(), result);
+        return ToolExecutionResult.ok(getName(), summary);
     }
 }
