@@ -1,0 +1,64 @@
+spring:
+  application:
+    name: ai-devops-assistant
+  profiles:
+    active: dev
+  jpa:
+    open-in-view: false
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          batch_size: 25
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+app:
+  jwt:
+    secret: "4c7d6e5f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d"
+    access-token-expiration-ms: 900000 # 15 minutes
+    refresh-token-expiration-ms: 604800000 # 7 days
+  security:
+    allowlist-commands:
+      - uptime
+      - vmstat
+      - df
+      - free
+      - top
+      - ps
+      - cat /proc/loadavg
+      - cat /proc/meminfo
+  ai:
+    provider: mock # mock, openai, ollama
+    openai:
+      api-key: ${OPENAI_API_KEY:mock-key}
+      model: ${OPENAI_MODEL:gpt-4o}
+      base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
+    ollama:
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      model: ${OLLAMA_MODEL:llama3}
+  integrations:
+    prometheus:
+      default-url: ${PROMETHEUS_URL:http://localhost:9090}
+    docker:
+      default-host: ${DOCKER_HOST:tcp://localhost:2375}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    export:
+      prometheus:
+        enabled: true

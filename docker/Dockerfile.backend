@@ -1,0 +1,25 @@
+# Multi-stage Dockerfile for Spring Boot Backend
+FROM eclipse-temurin:21-jdk-alpine AS builder
+WORKDIR /build
+
+COPY mvnw .
+COPY mvnw.cmd .
+COPY setup_maven.ps1 .
+COPY .mvn .mvn
+COPY pom.xml .
+COPY backend/pom.xml backend/pom.xml
+COPY backend/src backend/src
+
+RUN chmod +x ./mvnw || true
+RUN ./mvnw clean package -DskipTests
+
+FROM eclipse-temurin:21-jre-alpine
+WORKDIR /app
+
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+USER appuser:appgroup
+
+COPY --from=builder /build/backend/target/*.jar app.jar
+
+EXPOSE 8080
+ENTRYPOINT ["java", "-jar", "app.jar"]
